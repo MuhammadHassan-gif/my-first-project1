@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Efficiency Pathfinding Chase</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        h1 { margin: 5px 0; font-size: 1.5rem; }
+        #scoreboard { font-size: 1.2rem; margin-bottom: 10px; }
+        canvas {
+            background-color: #222;
+            border: 4px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Vector & Grid Path Chase</h1>
+    <div id="scoreboard">Score: <span id="score">0</span> | High Score: <span id="highScore">0</span></div>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const highScoreEl = document.getElementById("highScore");
+
+        // Grid configurations (Tile-based breakdown for ultra-fast AI lookup)
+        const TILE_SIZE = 40;
+        const COLS = canvas.width / TILE_SIZE; // 15
+        const ROWS = canvas.height / TILE_SIZE; // 10
+
+        let score = 0;
+        let highScore = 0;
+        let gameOver = false;
+        const keys = {};
+
+        window.addEventListener("keydown", e => keys[e.key] = true);
+        window.addEventListener("keyup", e => keys[e.key] = false);
+
+        // 1 = Wall, 0 = Empty Space
+        const grid = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,0,1,0,1,1,1,0,1,0,1],
+            [1,0,1,0,0,0,0,0,0,0,1,0,1,0,1],
+            [1,0,1,0,1,1,1,1,1,0,1,0,1,0,1],
+            [1,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,0,1,1,0,1,1,0,1,1,1,0,1],
+            [1,0,1,0,0,0,0,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,1,0,1,1,1,1,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        const player = { x: 60, y: 60, size: 24, speed: 3.5, color: "#00adb5" };
+        const enemy = { x: 500, y: 300, size: 24, speed: 2, color: "#ff2e63", path: [] };
+        const coin = { x: 0, y: 0, size: 12, color: "#f9d423" };
+
+        function getTileCoords(x, y) {
+            return {
+                col: Math.floor((x + TILE_SIZE / 2) / TILE_SIZE),
+                row: Math.floor((y + TILE_SIZE / 2) / TILE_SIZE)
+            };
+        }
+
+        function isWalkable(col, row) {
+            if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+            return grid[row][col] === 0;
+        }
+
+        function spawnCoin() {
+            let valid = false;
+            while (!valid) {
+                let c = Math.floor(Math.random() * COLS);
+                let r = Math.floor(Math.random() * ROWS);
+                if (grid[r][c] === 0) {
+                    coin.x = c * TILE_SIZE + (TILE_SIZE - coin.size) / 2;
+                    coin.y = r * TILE_SIZE + (TILE_SIZE - coin.size) / 2;
+                    valid = true;
+                }
+            }
+        }
+
+        // --- ULTRA-EFFICIENT BFS PATHFINDING ---
+        // Instantly maps the entire grid layout. Computational footprint is near-zero.
+        function findPath(startCol, startRow, targetCol, targetRow) {
+            if (startCol === targetCol && startRow === targetRow) return [];
+
+            let queue = [[startCol, startRow]];
+            let visited = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+            let parentMap = {};
+
+            visited[startRow][startCol] = true;
+
+            const dirs = [[0,-1], [0,1], [-1,0], [1,0]];
+
+            while (queue.length > 0) {
+                let [currC, currR] = queue.shift();
+
+                if (currC === targetCol && currR === targetRow) {
+                    // Reconstruct path
+                    let path = [];
+                    let key = `${currC},${currR}`;
+                    while (key) {
+                        let p = parentMap[key];
+                        if (!p) break;
+                        path.push(p.move);
+                        key = p.parentKey;
+                    }
+                    return path.reverse();
+                }
+
+                for (let [dc, dr] of dirs) {
+                    let nextC = currC + dc;
+                    let nextR = currR + dr;
+
+                    if (isWalkable(nextC, nextR) && !visited[nextR][nextC]) {
+                        visited[nextR][nextC] = true;
+                        queue.push([nextC, nextR]);
+                        parentMap[`${nextC},${nextR}`] = {
+                            move: { col: nextC, row: nextR },
+                            parentKey: `${currC},${currR}`
+                        };
+                    }
+                }
+            }
+            return []; // No path found
+        }
+
+        function checkCollision(p, e) {
+            return p.x < e.x + e.size && p.x + p.size > e.x && p.y < e.y + e.size && p.y + p.size > e.y;
+        }
+
+        // Wall collision buffer checking for smooth player sliding
+        function moveEntityWithPhysics(entity, dx, dy) {
+            let nextX = entity.x + dx;
+            let nextY = entity.y + dy;
+
+            // Check corner bounds via checking bounding box intersections with grid
+            let points = [
+                {x: nextX, y: entity.y},
+                {x: nextX + entity.size, y: entity.y},
+                {x: nextX, y: entity.y + entity.size},
+                {x: nextX + entity.size, y: entity.y + entity.size}
+            ];
+            let canMoveX = points.every(p => isWalkable(Math.floor(p.x/TILE_SIZE), Math.floor(p.y/TILE_SIZE)));
+            if (canMoveX) entity.x = nextX;
+
+            points = [
+                {x: entity.x, y: nextY},
+                {x: entity.x + entity.size, y: nextY},
+                {x: entity.x, y: nextY + entity.size},
+                {x: entity.x + entity.size, y: entity.y + entity.size}
+            ];
+            let canMoveY = points.every(p => isWalkable(Math.floor(p.x/TILE_SIZE), Math.floor(p.y/TILE_SIZE)));
+            if (canMoveY) entity.y = nextY;
+        }
+
+        function resetGame() {
+            score = 0; scoreEl.innerText = score;
+            player.x = 60; player.y = 60;
+            enemy.x = 500; enemy.y = 300;
+            spawnCoin();
+            gameOver = false;
+        }
+
+        let aiUpdateCounter = 0;
+
+        function update() {
+            if (gameOver) {
+                if (keys[" "] || keys["Enter"]) resetGame();
+                return;
+            }
+
+            // Player Input Processing
+            let dx = 0; let dy = 0;
+            if (keys["ArrowUp"] || keys["w"]) dy = -player.speed;
+            if (keys["ArrowDown"] || keys["s"]) dy = player.speed;
+            if (keys["ArrowLeft"] || keys["a"]) dx = -player.speed;
+            if (keys["ArrowRight"] || keys["d"]) dx = player.speed;
+            if (dx !== 0 || dy !== 0) moveEntityWithPhysics(player, dx, dy);
+
+            // AI Efficiency Hack: Only recalculate path every 5 frames instead of every single frame
+            aiUpdateCounter++;
+            let pTile = getTileCoords(player.x, player.y);
+            let eTile = getTileCoords(enemy.x, enemy.y);
+
+            if (aiUpdateCounter % 5 === 0) {
+                enemy.path = findPath(eTile.col, eTile.row, pTile.col, pTile.row);
+            }
+
+            // Enemy movement towards the next path node
+            if (enemy.path && enemy.path.length > 0) {
+                let nextTarget = enemy.path[0];
+                let targetX = nextTarget.col * TILE_SIZE + (TILE_SIZE - enemy.size) / 2;
+                let targetY = nextTarget.row * TILE_SIZE + (TILE_SIZE - enemy.size) / 2;
+
+                let edx = targetX - enemy.x;
+                let edy = targetY - enemy.y;
+                let dist = Math.sqrt(edx * edx + edy * edy);
+
+                if (dist < 4) {
+                    enemy.path.shift(); // Reached node, move to next node
+                } else {
+                    enemy.x += (edx / dist) * enemy.speed;
+                    enemy.y += (edy / dist) * enemy.speed;
+                }
+            }
+
+            if (checkCollision(player, coin)) {
+                score++;
+                if (score > highScore) { highScore = score; highScoreEl.innerText = highScore; }
+                scoreEl.innerText = score;
+                spawnCoin();
+            }
+
+            if (checkCollision(player, enemy)) gameOver = true;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Render Level Grid Map
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] === 1) {
+                        ctx.fillStyle = "#333";
+                        ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = "#222";
+                        ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            }
+
+            // Render entities
+            ctx.fillStyle = coin.color;
+            ctx.beginPath();
+            ctx.arc(coin.x + coin.size/2, coin.y + coin.size/2, coin.size/2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+
+            ctx.fillStyle = enemy.color;
+            ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+
+            if (gameOver) {
+                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff"; ctx.font = "30px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        spawnCoin();
+        gameLoop();
+    </script>
+</body>
+</html>
