@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efficient Neon Tic-Tac-Toe</title>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f0c1b, #201335);
+            --cell-bg: #171227;
+            --color-x: #ff0055;
+            --color-o: #00f0ff;
+            --color-win: #39ff14;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px var(--color-x);
+        }
+
+        .status {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            font-weight: 600;
+            min-height: 30px;
+            transition: color 0.2s;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 90px);
+            grid-template-rows: repeat(3, 90px);
+            gap: 12px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        .cell {
+            background: var(--cell-bg);
+            border: none;
+            border-radius: 8px;
+            font-size: 2.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .cell:hover:not(:disabled) {
+            background: #231b3a;
+            transform: scale(1.03);
+        }
+
+        .cell.x { color: var(--color-x); text-shadow: 0 0 10px var(--color-x); }
+        .cell.o { color: var(--color-o); text-shadow: 0 0 10px var(--color-o); }
+
+        .cell.winner {
+            background: var(--color-win) !important;
+            color: #000 !important;
+            text-shadow: none;
+            box-shadow: 0 0 15px var(--color-win);
+        }
+
+        .reset-btn {
+            margin-top: 25px;
+            padding: 10px 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(45deg, var(--color-x), var(--color-o));
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(255, 0, 85, 0.3);
+        }
+
+        .reset-btn:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+
+    <h1>Tic Tac Toe</h1>
+    <div class="status" id="status">Player X's turn</div>
+
+    <div class="board" id="board">
+        <button class="cell" data-i="0"></button>
+        <button class="cell" data-i="1"></button>
+        <button class="cell" data-i="2"></button>
+        <button class="cell" data-i="3"></button>
+        <button class="cell" data-i="4"></button>
+        <button class="cell" data-i="5"></button>
+        <button class="cell" data-i="6"></button>
+        <button class="cell" data-i="7"></button>
+        <button class="cell" data-i="8"></button>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">Reset</button>
+
+    <script>
+        const board = document.getElementById('board');
+        const statusText = document.getElementById('status');
+        const resetBtn = document.getElementById('resetBtn');
+        const cells = board.children;
+
+        let turn = 'X';
+        let moves = 0;
+        let boardState = Array(9).fill('');
+        
+        const WIN_LINES = [
+            [0,1,2], [3,4,5], [6,7,8], // Rows
+            [0,3,6], [1,4,7], [2,5,8], // Cols
+            [0,4,8], [2,4,6]           // Diagonals
+        ];
+
+        // Efficient Event Delegation: Single listener on parent container
+        board.addEventListener('click', (e) => {
+            const cell = e.target;
+            if (!cell.classList.contains('cell') || cell.textContent || moves === -1) return;
+
+            const idx = cell.dataset.i;
+            boardState[idx] = turn;
+            cell.textContent = turn;
+            cell.classList.add(turn.toLowerCase());
+            moves++;
+
+            if (checkWin(idx)) {
+                statusText.textContent = `Player ${turn} Wins! 🎉`;
+                statusText.style.color = 'var(--color-win)';
+                moves = -1; // Freeze game
+                return;
+            }
+
+            if (moves === 9) {
+                statusText.textContent = "It's a Draw! 👔";
+                statusText.style.color = '#fff';
+                return;
+            }
+
+            // Switch turn
+            turn = turn === 'X' ? 'O' : 'X';
+            statusText.textContent = `Player ${turn}'s turn`;
+            statusText.style.color = turn === 'X' ? 'var(--color-x)' : 'var(--color-o)';
+        });
+
+        // Optimized Win Check: Only checks lines connected to the *last placed move*
+        function checkWin(lastIdx) {
+            const idx = parseInt(lastIdx);
+            for (const line of WIN_LINES) {
+                if (line.includes(idx)) {
+                    if (boardState[line[0]] === turn && boardState[line[1]] === turn && boardState[line[2]] === turn) {
+                        // Highlight only the winning combination
+                        line.forEach(i => cells[i].classList.add('winner'));
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        resetBtn.addEventListener('click', () => {
+            turn = 'X';
+            moves = 0;
+            boardState.fill('');
+            statusText.textContent = "Player X's turn";
+            statusText.style.color = 'var(--color-x)';
+            
+            for (let cell of cells) {
+                cell.textContent = '';
+                cell.className = 'cell'; // Wipes all state classes instantly
+            }
+        });
+    </script>
+</body>
+</html>
