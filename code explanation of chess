@@ -1,0 +1,32 @@
+🎮 Pathfinding Chase Game – Short & Clean Explanation
+🔹 1. HTML (Structure)
+Canvas use kiya gaya hai game display ke liye
+Score aur High Score show hota hai
+Title + scoreboard UI
+🎨 2. CSS (Design)
+Dark theme background
+Canvas border aur shadow for game look
+Simple aur clean interface
+⚙️ 3. JavaScript (Game Logic)
+👤 Player
+Arrow keys / WASD se move karta hai
+Walls ke through nahi ja sakta
+🤖 Enemy (AI)
+Player ko chase karta hai
+BFS Pathfinding use hoti hai (shortest path find karne ke liye)
+Har frame par nahi, sirf kuch frames baad path update hota hai (efficient)
+🪙 Coin System
+Random position par spawn hota hai
+Player coin collect kare to score increase hota hai
+📌 4. Collision System
+Player vs Coin → Score increase
+Player vs Enemy → Game Over
+🔄 5. Game Loop
+update() → movement & logic
+draw() → graphics render
+requestAnimationFrame() → smooth animation
+💡 6. Special Features
+Grid-based movement system
+BFS pathfinding (AI intelligence)
+Smooth collision physics
+High score tracking
