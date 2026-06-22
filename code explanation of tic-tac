@@ -1,0 +1,16 @@
+🎮 Tic Tac Toe – Short & Clean Explanation
+🔹 1. HTML (Structure)
+Game ka layout banata hai
+3×3 board (9 cells), status text, aur reset button
+🎨 2. CSS (Design)
+Neon style UI
+X = Pink, O = Blue
+Winner = Green highlight
+⚙️ 3. JavaScript (Logic)
+Players ki turn manage hoti hai (X ↔ O)
+Click par cell fill hota hai
+Win combinations check hoti hain
+Win ya draw par game stop ho jata hai
+🔄 4. Reset Function
+Board clear karta hai
+Game dobara start hota hai 
